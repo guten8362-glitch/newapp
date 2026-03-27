@@ -8,14 +8,12 @@ export default {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        display: ['"Space Grotesk"', 'sans-serif'],
+        code: ['"IBM Plex Mono"', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -51,13 +49,18 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        neon: "hsl(var(--neon))",
-        "priority-high": "hsl(var(--priority-high))",
-        "priority-medium": "hsl(var(--priority-medium))",
-        "priority-low": "hsl(var(--priority-low))",
-        "status-online": "hsl(var(--status-online))",
-        "status-busy": "hsl(var(--status-busy))",
-        "status-offline": "hsl(var(--status-offline))",
+        critical: {
+          DEFAULT: "hsl(var(--critical))",
+          foreground: "hsl(var(--critical-foreground))",
+        },
+        medium: {
+          DEFAULT: "hsl(var(--medium))",
+          foreground: "hsl(var(--medium-foreground))",
+        },
+        normal: {
+          DEFAULT: "hsl(var(--normal))",
+          foreground: "hsl(var(--normal-foreground))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

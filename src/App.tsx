@@ -8,9 +8,14 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import EmployeeProfile from "./pages/EmployeeProfile";
 import CommandBoard from "./pages/CommandBoard";
+import Performance from "./pages/Performance";
+import TaskHistory from "./pages/TaskHistory";
 import VoiceCommand from "./pages/VoiceCommand";
 import NotFound from "./pages/NotFound";
+import AudioTest from "./pages/AudioTest";
 import ProtectedRoute from "./components/ProtectedRoute";
+
+import AITaskAssistant from "./components/AITaskAssistant";
 
 const queryClient = new QueryClient();
 
@@ -18,19 +23,27 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
+      <Sonner position="top-right" theme="dark" richColors />
 
       <BrowserRouter>
+        <AITaskAssistant />
         <Routes>
 
           {/* Public routes */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           
-          {/* Command Board - PUBLIC */}
-          <Route path="/command-board" element={<CommandBoard />} />
+          {/* Command Board - Accessible to all authenticated users */}
+          <Route 
+            path="/command-board" 
+            element={
+              <ProtectedRoute>
+                <CommandBoard />
+              </ProtectedRoute>
+            } 
+          />
 
-          {/* Protected routes */}
+          {/* Protected routes - Owner only */}
           <Route 
             path="/dashboard" 
             element={
@@ -43,8 +56,17 @@ const App = () => (
           <Route 
             path="/employee/:id" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="owner">
                 <EmployeeProfile />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/performance" 
+            element={
+              <ProtectedRoute requiredRole="owner">
+                <Performance />
               </ProtectedRoute>
             } 
           />
@@ -52,11 +74,22 @@ const App = () => (
           <Route 
             path="/voice-command/:id" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRole="owner">
                 <VoiceCommand />
               </ProtectedRoute>
             } 
           />
+
+          <Route 
+            path="/history" 
+            element={
+              <ProtectedRoute requiredRole="owner">
+                <TaskHistory />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route path="/audio-test" element={<AudioTest />} />
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />

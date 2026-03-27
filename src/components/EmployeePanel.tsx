@@ -10,6 +10,7 @@ type Employee = {
   department: string;
   tasks: number;
   avatar: string;
+  presence: "active" | "idle" | "offline";
 };
 
 const EmployeePanel = ({ onAddEmployee }: { onAddEmployee: () => void }) => {
@@ -21,48 +22,42 @@ const EmployeePanel = ({ onAddEmployee }: { onAddEmployee: () => void }) => {
 
   useEffect(() => {
 
-    async function loadTeam() {
+    const loadTeam = async () => {
       try {
-
-        // Load employees and tasks
         const team = await getTeam();
         const tasks = await getTasks();
 
         const formatted = team.map((emp: any, index: number) => {
-
-          // Count tasks assigned to this employee
           const taskCount = tasks.filter(
             (task: any) =>
               task.employee_name === emp.name &&
               task.status === "ongoing"
           ).length;
 
+          const presences: ("active" | "idle" | "offline")[] = ["active", "idle", "active"];
+          const presence = presences[index % presences.length];
+
           return {
-            id: index.toString(),
+            id: emp.$id || index.toString(),
             name: emp.name || "Unknown",
             department: emp.department || "General",
             tasks: taskCount,
-            avatar: emp.name
-              ? emp.name.charAt(0).toUpperCase()
-              : "?"
+            avatar: emp.name ? emp.name.charAt(0).toUpperCase() : "?",
+            presence: presence
           };
-
         });
 
         setEmployees(formatted);
-
       } catch (err) {
-
         console.error("Error loading team:", err);
-
       } finally {
-
         setLoading(false);
-
       }
-    }
+    };
 
     loadTeam();
+    const interval = setInterval(loadTeam, 15000); // 15s refresh
+    return () => clearInterval(interval);
 
   }, []);
 
@@ -113,6 +108,16 @@ const EmployeePanel = ({ onAddEmployee }: { onAddEmployee: () => void }) => {
                 <p className="text-sm text-muted-foreground">
                   {emp.department}
                 </p>
+
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className={`w-2 h-2 rounded-full ${
+                    emp.presence === "active" ? "bg-green-500 animate-pulse" : 
+                    emp.presence === "idle" ? "bg-yellow-500" : "bg-gray-500"
+                  }`} />
+                  <span className="text-[10px] uppercase font-bold tracking-tighter opacity-70">
+                    {emp.presence === "active" ? "Working" : emp.presence === "idle" ? "Idle" : "Offline"}
+                  </span>
+                </div>
 
               </div>
 

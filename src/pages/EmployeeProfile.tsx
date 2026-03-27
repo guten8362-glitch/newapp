@@ -5,18 +5,16 @@ import {
   ListTodo,
   CheckCircle2,
   Send,
-  UserPlus,
   Clock,
   ChevronDown,
   Calendar,
-  ImagePlus,
-  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useParams } from "react-router-dom";
 import MessageDialog from "@/components/MessageDialog";
 import { getEmployeeProfile, createTask } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 
 const statusColors: Record<string, string> = {
   online: "text-status-online",
@@ -47,16 +45,6 @@ const EmployeeProfile = () => {
   const [loading, setLoading] = useState(true);
   const [showTasks, setShowTasks] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
-  
-  // Task assignment states
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [taskMessage, setTaskMessage] = useState("");
-  const [taskPriority, setTaskPriority] = useState<Priority>("medium");
-  const [taskDeadline, setTaskDeadline] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadEmployee() {
@@ -112,116 +100,6 @@ const EmployeeProfile = () => {
     if (id) loadEmployee();
   }, [id]);
 
-  // File handling
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const clearSelectedFile = () => {
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  // Submit task assignment
-  const handleAssignTask = async () => {
-    if (!taskMessage.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a task description",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      console.log("Assigning task:", {
-        message: taskMessage,
-        priority: taskPriority,
-        deadline: taskDeadline,
-        hasFile: !!selectedFile
-      });
-
-      // Create task with optional file and deadline
-      const newTask = await createTask(
-        {
-          title: taskMessage,
-          description: taskMessage,
-          employee_name: employee.name,
-          priority: taskPriority,
-          deadline: taskDeadline || "Not Set"
-        },
-        selectedFile || undefined // Pass file if selected, otherwise undefined
-      );
-
-      console.log("Task assigned successfully:", newTask);
-
-      // Reset form
-      setTaskMessage("");
-      setTaskPriority("medium");
-      setTaskDeadline("");
-      setSelectedFile(null);
-      setShowTaskForm(false);
-      
-      toast({
-        title: "Success",
-        description: "Task assigned successfully!"
-      });
-      
-      // Refresh employee data
-      const updatedData = await getEmployeeProfile(employee.name);
-      const nameParts = updatedData.name.split(" ");
-      const avatar = nameParts
-        .map((n: string) => n[0])
-        .join("")
-        .substring(0, 2)
-        .toUpperCase();
-
-      setEmployee({
-        name: updatedData.name,
-        department: updatedData.department || "General",
-        status: "online",
-        avatar,
-        assigned: updatedData.assigned_tasks ?? 0,
-        completed: updatedData.completed_tasks ?? 0,
-        email: updatedData.email || "",
-        ongoing: (updatedData.ongoing || []).map((task: any) => ({
-          id: task.$id,
-          message: task.title || task.description || "No description",
-          priority: (task.priority || "low").toLowerCase(),
-          timestamp: task.deadline
-            ? new Date(task.deadline).toLocaleDateString()
-            : "No deadline"
-        })),
-        completedTasks: (updatedData.completed || []).map((task: any) => ({
-          id: task.$id,
-          message: task.title || task.description || "No description",
-          priority: (task.priority || "low").toLowerCase(),
-          timestamp: task.deadline
-            ? new Date(task.deadline).toLocaleDateString()
-            : "No deadline"
-        }))
-      });
-      
-    } catch (error) {
-      console.error("Failed to assign task:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to assign task",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const tasksToShow = employee?.ongoing || [];
 
   if (loading) {
@@ -252,14 +130,6 @@ const EmployeeProfile = () => {
     <div className="min-h-screen bg-background grid-bg p-4">
       <div className="max-w-lg mx-auto space-y-6">
 
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept="image/*,audio/*"
-        />
 
         <motion.button
           initial={{ opacity: 0 }}
@@ -300,131 +170,7 @@ const EmployeeProfile = () => {
             </div>
           </div>
 
-          <div className="flex gap-3">
-  <Button
-    variant="glass"
-    className="flex-1"
-    onClick={() => setShowTaskForm(!showTaskForm)}
-  >
-    <UserPlus className="w-4 h-4" /> {showTaskForm ? "Cancel" : "Assign Task"}
-  </Button>
-</div>
         </motion.div>
-
-        {/* Task Assignment Form */}
-        <AnimatePresence>
-          {showTaskForm && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-card rounded-xl p-5 space-y-4"
-            >
-              <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-primary" />
-                Assign New Task to {employee.name}
-              </h3>
-              
-              {/* Task Description */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Task Description *</label>
-                <textarea
-                  value={taskMessage}
-                  onChange={(e) => setTaskMessage(e.target.value)}
-                  placeholder="Enter task description..."
-                  className="w-full p-3 rounded-lg bg-secondary border border-border text-foreground text-sm min-h-[80px] focus:outline-none focus:border-primary/50"
-                  required
-                />
-              </div>
-
-              {/* Priority Selector */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Priority</label>
-                <div className="flex gap-2">
-                  {(["high", "medium", "low"] as Priority[]).map((p) => (
-                    <Button
-                      key={p}
-                      size="sm"
-                      variant={taskPriority === p ? "neon" : "glass"}
-                      onClick={() => setTaskPriority(p)}
-                      className="flex-1 capitalize"
-                    >
-                      {p}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Deadline Picker */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Deadline (Optional)</label>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="datetime-local"
-                    value={taskDeadline}
-                    onChange={(e) => setTaskDeadline(e.target.value)}
-                    className="flex-1 p-2 rounded-lg bg-secondary border border-border text-foreground text-sm focus:outline-none focus:border-primary/50"
-                  />
-                </div>
-              </div>
-
-              {/* File Attachment */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Attachment (Optional)</label>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="glass"
-                    size="sm"
-                    onClick={handleFileSelect}
-                    className="flex items-center gap-2"
-                  >
-                    <ImagePlus className="w-4 h-4" />
-                    {selectedFile ? "Change file" : "Attach file"}
-                  </Button>
-                  
-                  {selectedFile && (
-                    <div className="flex items-center gap-2 text-xs bg-secondary/50 p-2 rounded-lg flex-1">
-                      <span className="truncate text-foreground">📎 {selectedFile.name}</span>
-                      <button
-                        onClick={clearSelectedFile}
-                        className="text-red-400 hover:text-red-500"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="neon"
-                  onClick={handleAssignTask}
-                  disabled={isSubmitting || !taskMessage.trim()}
-                  className="flex-1"
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                      Assigning...
-                    </div>
-                  ) : (
-                    "Assign Task"
-                  )}
-                </Button>
-                <Button
-                  variant="glass"
-                  onClick={() => setShowTaskForm(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Ongoing Tasks Section */}
         <motion.div

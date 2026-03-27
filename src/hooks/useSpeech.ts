@@ -1,56 +1,101 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 
 export function useSpeech() {
-  const [enabled, setEnabled] = useState(false);
+  const enabled = useRef(true);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
+  // Load voices
   useEffect(() => {
     const loadVoices = () => {
       const voices = speechSynthesis.getVoices();
       if (voices.length > 0) {
-        voiceRef.current =
-          voices.find(
-            (v) =>
-              v.lang.startsWith("en") &&
-              (v.name.toLowerCase().includes("samantha") ||
-                v.name.toLowerCase().includes("female") ||
-                v.name.includes("Google US English"))
-          ) ||
-          voices.find((v) => v.lang.startsWith("en")) ||
-          voices[0];
         setVoicesLoaded(true);
       }
     };
 
     loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    speechSynthesis.addEventListener("voiceschanged", loadVoices);
+
     return () => {
-      speechSynthesis.onvoiceschanged = null;
+      speechSynthesis.removeEventListener("voiceschanged", loadVoices);
     };
   }, []);
 
+  const setEnabled = useCallback((val: boolean) => {
+    enabled.current = val;
+    if (!val) {
+      speechSynthesis.cancel(); // only cancel when turning OFF
+    }
+  }, []);
+
+  // 🔥 Female voice selection
+  const getFemaleVoice = useCallback((): SpeechSynthesisVoice | null => {
+    const voices = speechSynthesis.getVoices();
+
+    if (!voices.length) return null;
+
+    const female =
+      voices.find(v =>
+        v.name.toLowerCase().includes("zira") ||
+        v.name.toLowerCase().includes("samantha") ||
+        v.name.toLowerCase().includes("female") ||
+        v.name.toLowerCase().includes("google us english")
+      ) ||
+      voices.find(v => v.lang.startsWith("en")) ||
+      voices[0];
+
+    return female;
+  }, []);
+
+  // 🔊 QUEUE-BASED SPEAK FUNCTION (FIXED)
   const speak = useCallback(
-    (text: string, priority?: string, assignee?: string) => {
-      if (!enabled) return;
-      speechSynthesis.cancel();
+    (
+      text: string,
+      priority: "critical" | "medium" | "normal",
+      assignee?: string,
+      customMessage?: string,
+      onStart?: () => void,
+      onEnd?: () => void
+    ) => {
+      if (!enabled.current) return;
 
-      const prefix =
+      const priorityText =
         priority === "critical"
-          ? `Critical task${assignee ? ` for ${assignee}` : ""}: `
+          ? "Critical task"
           : priority === "medium"
-          ? `Priority task${assignee ? ` for ${assignee}` : ""}: `
-          : "";
+          ? "Important task"
+          : "Task";
 
-      const utterance = new SpeechSynthesisUtterance(prefix + text);
-      if (voiceRef.current) utterance.voice = voiceRef.current;
-      utterance.rate = 0.95;
+      const assigneeText = assignee
+        ? `assigned to ${assignee}`
+        : "assigned to team";
+
+      const message = customMessage || `${priorityText}. ${assigneeText}. ${text}`;
+
+      const utterance = new SpeechSynthesisUtterance(message);
+
+      if (onStart) utterance.onstart = onStart;
+      if (onEnd) utterance.onend = onEnd;
+
+      const voice = getFemaleVoice();
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      utterance.rate = 0.9;
       utterance.pitch = 1.1;
       utterance.volume = 1;
+
+      // ❗ DO NOT cancel → this allows queue
       speechSynthesis.speak(utterance);
     },
-    [enabled]
+    [getFemaleVoice]
   );
+  const playNotificationSound = useCallback(() => {
+    if (!enabled.current) return;
+    const audio = new Audio('/notification.mpeg');
+    audio.play().catch(e => console.error("Could not play notification sound:", e));
+  }, []);
 
-  return { speak, enabled, setEnabled, voicesLoaded };
+  return { speak, setEnabled, voicesLoaded, playNotificationSound };
 }

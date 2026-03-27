@@ -1,4 +1,4 @@
-import { Client, Databases, Storage, ID } from "appwrite";
+import { Client, Databases, Storage, ID, Query } from "appwrite";
 
 const client = new Client()
   .setEndpoint("https://nyc.cloud.appwrite.io/v1")
@@ -20,7 +20,11 @@ export async function getTasks() {
 
   const res = await databases.listDocuments(
     DATABASE_ID,
-    TASK_COLLECTION
+    TASK_COLLECTION,
+    [
+      Query.orderDesc("$createdAt"),
+      Query.limit(100)
+    ]
   );
 
   return res.documents;
@@ -130,7 +134,7 @@ export async function getEmployeeProfile(name: string) {
   const ongoing = tasks.documents.filter(
     (t: any) =>
       t.employee_name === name &&
-      t.status === "ongoing"
+      t.status !== "completed"
   );
 
   const completed = tasks.documents.filter(
@@ -148,6 +152,25 @@ export async function getEmployeeProfile(name: string) {
     ongoing,
     completed
   };
+}
+
+
+
+/* -------------------------
+   START WORKING ON TASK
+--------------------------*/
+export async function startWorking(taskId: string, personEmail: string) {
+
+  const updated = await databases.updateDocument(
+    DATABASE_ID,
+    TASK_COLLECTION,
+    taskId,
+    {
+      status: `taken|${personEmail}`
+    }
+  );
+
+  return updated;
 }
 
 

@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, Zap, Building2, Crown, Shield } from "lucide-react";
+import { motion } from "framer-motion";
+import { Mail, Lock, Eye, EyeOff, Zap, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { loginUser, getCurrentUser } from "../lib/appwrite";
+import { loginUser, getCurrentUser, getUserRole, loginWithGoogle } from "../lib/appwrite";
+
+// You can add your particular admin emails here so they always bypass the check
+const ADMIN_EMAILS = ["admin@example.com", "ceo@gmail.com"];
 
 const GridBackground = () => (
   <div className="absolute inset-0 grid-bg overflow-hidden">
@@ -31,18 +34,10 @@ const GridBackground = () => (
   </div>
 );
 
-type UserRole = "company" | "owner" | null;
-
-const roleConfig = {
-  company: { icon: Building2, label: "Company Dashboard", desc: "Access team management & tasks", redirect: "/command-board" },
-  owner: { icon: Crown, label: "Prime User / Owner", desc: "Full admin control & analytics", redirect: "/dashboard" },
-};
-
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -56,12 +51,12 @@ const Login = () => {
     try {
       const user = await getCurrentUser();
       if (user) {
-        const savedRole = localStorage.getItem('userRole') as UserRole;
-        if (savedRole === 'owner') {
-          setSelectedRole('owner');
-          // Auto-redirect to dashboard if already logged in as owner
+        const role = await getUserRole();
+        const isHardcodedAdmin = ADMIN_EMAILS.includes((user.email || "").toLowerCase());
+        
+        if (role === "admin" || isHardcodedAdmin) {
           navigate('/dashboard');
-        } else if (savedRole === 'company') {
+        } else {
           navigate('/command-board');
         }
       }
@@ -70,28 +65,9 @@ const Login = () => {
     }
   };
 
-  const handleRoleSelect = (role: UserRole) => {
-    setSelectedRole(role);
-    
-    // If company is selected, go directly (no login needed)
-    if (role === 'company') {
-      localStorage.setItem('userRole', 'company');
-      navigate('/command-board');
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedRole) {
-      toast({
-        title: "Role Required",
-        description: "Please select a role to continue",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (!email || !password) {
       toast({
         title: "Fields Required",
@@ -107,16 +83,30 @@ const Login = () => {
       // Login with Appwrite
       const user = await loginUser(email, password);
       
-      // Store user role
-      localStorage.setItem("userRole", selectedRole);
-      localStorage.setItem("userEmail", user.email || "");
+      // Get actual role from Appwrite team
+      const actualRole = await getUserRole();
+      const isHardcodedAdmin = ADMIN_EMAILS.includes((user.email || "").toLowerCase());
       
-      toast({
-        title: "Login Successful",
-        description: `Welcome back, ${user.name || "Owner"}!`,
-      });
-
-      navigate("/dashboard");
+      // Redirect based on role
+      if (actualRole === "admin" || isHardcodedAdmin) {
+        localStorage.setItem("userEmail", user.email || "");
+        
+        toast({
+          title: "Login Successful",
+          description: `Welcome back, Admin!`,
+        });
+        
+        navigate("/dashboard");
+      } else {
+        localStorage.setItem("userEmail", user.email || "");
+        
+        toast({
+          title: "Login Successful",
+          description: `Welcome to Command Board!`,
+        });
+        
+        navigate("/command-board");
+      }
       
     } catch (error: any) {
       toast({
@@ -126,6 +116,18 @@ const Login = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLoginClick = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      toast({
+        title: "Google Login Failed",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -153,133 +155,111 @@ const Login = () => {
             <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Smart Priority <span className="text-primary neon-text">Command</span>
             </h1>
-            <p className="text-muted-foreground text-sm">Select your access level</p>
+            <p className="text-muted-foreground text-sm">Sign in to continue</p>
           </motion.div>
 
-          {/* Role Selection */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+          {/* Login Form */}
+          <motion.form
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="grid grid-cols-2 gap-3"
+            onSubmit={handleLogin}
+            className="space-y-5"
           >
-            {(["company", "owner"] as const).map((role) => {
-              const config = roleConfig[role];
-              const Icon = config.icon;
-              const isSelected = selectedRole === role;
-              return (
-                <motion.button
-                  key={role}
+            {/* Email field */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-11 pl-10 pr-4 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Password field */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-11 pl-10 pr-10 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
                   type="button"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleRoleSelect(role)}
-                  className={`relative p-4 rounded-xl border text-left transition-all duration-300 ${
-                    isSelected
-                      ? "border-primary/60 bg-primary/10 neon-glow"
-                      : "border-border bg-secondary/50 hover:border-primary/30"
-                  }`}
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Icon className={`w-6 h-6 mb-2 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                  <p className={`text-sm font-semibold ${isSelected ? "text-primary" : "text-foreground"}`}>
-                    {config.label}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{config.desc}</p>
-                  {role === 'company' && (
-                    <span className="absolute bottom-2 right-2 text-[8px] text-green-500">
-                      No login
-                    </span>
-                  )}
-                  {isSelected && (
-                    <motion.div
-                      layoutId="role-indicator"
-                      className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary"
-                      initial={false}
-                    />
-                  )}
-                </motion.button>
-              );
-            })}
-          </motion.div>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
 
-          {/* Form - only show after owner role selection */}
-          <AnimatePresence>
-            {selectedRole === 'owner' && (
-              <motion.form
-                key="login-form"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                onSubmit={handleLogin}
-                className="space-y-5 overflow-hidden"
-              >
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full h-11 pl-10 pr-4 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-                      placeholder="owner@command.io"
-                      required
-                    />
-                  </div>
-                </div>
+            {/* Login Button */}
+            <Button 
+              type="submit" 
+              variant="neon" 
+              className="w-full h-11 text-sm font-semibold"
+              disabled={loading}
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
 
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-11 pl-10 pr-10 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
+            {/* Divider */}
+            <div className="relative flex items-center justify-center py-2">
+              <div className="border-t border-border flex-1" />
+              <span className="px-3 text-[10px] text-muted-foreground uppercase tracking-widest">or</span>
+              <div className="border-t border-border flex-1" />
+            </div>
 
-                {/* Test credentials hint - remove in production */}
-                <div className="text-xs text-muted-foreground bg-secondary/50 p-2 rounded-lg">
-                  <p className="font-medium mb-1">Test credentials:</p>
-                  <p>Email: test@command.io</p>
-                  <p>Password: password123</p>
-                </div>
+            {/* Google Login Button */}
+            <Button 
+              type="button"
+              variant="glass"
+              onClick={handleGoogleLoginClick}
+              className="w-full h-11 border-white/10 hover:bg-white/5"
+            >
+              <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  fill="#EA4335"
+                />
+              </svg>
+              Sign in with Google
+            </Button>
 
-                <div className="space-y-3 pt-2">
-                  <Button 
-                    type="submit" 
-                    variant="neon" 
-                    className="w-full h-11 text-sm font-semibold"
-                    disabled={loading}
-                  >
-                    <Shield className="w-4 h-4 mr-2" />
-                    {loading ? "Logging in..." : `Access Owner Panel`}
-                  </Button>
-
-                  <div className="relative flex items-center justify-center">
-                    <div className="border-t border-border flex-1" />
-                    <div className="border-t border-border flex-1" />
-                  </div>
-                </div>
-              </motion.form>
-            )}
-          </AnimatePresence>
+            {/* Sign up hint */}
+            <p className="text-xs text-center text-muted-foreground/60 mt-4">
+              New users are automatically registered
+            </p>
+          </motion.form>
         </div>
       </motion.div>
     </div>

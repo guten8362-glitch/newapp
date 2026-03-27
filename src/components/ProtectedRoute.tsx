@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { getCurrentUser } from '../lib/appwrite';
-
-// Define the allowed roles
-type UserRole = 'owner' | 'company' | undefined;
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { getCurrentUser, getUserRole } from "../lib/appwrite";
 
 interface Props {
   children: JSX.Element;
-  requiredRole?: UserRole; // Make it optional
+  requiredRole?: "owner"; // only owner needs restriction
 }
+
+// You can add your particular admin emails here so they always bypass the check
+const ADMIN_EMAILS = ["admin@example.com", "ceo@gmail.com"];
 
 const ProtectedRoute = ({ children, requiredRole }: Props) => {
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -20,48 +21,53 @@ const ProtectedRoute = ({ children, requiredRole }: Props) => {
 
   const checkAuth = async () => {
     try {
-      // Check if user is logged in
       const user = await getCurrentUser();
-      
+
+      // Not logged in
       if (!user) {
-        console.log("No user logged in");
-        setAuthorized(false);
+        setRedirectTo("/login");
         setLoading(false);
         return;
       }
 
-      // Get user role from localStorage (set during login)
-      const userRole = localStorage.getItem('userRole') as UserRole;
-      
-      // If role is required, check it
-      if (requiredRole && userRole !== requiredRole) {
-        console.log(`Role mismatch: required ${requiredRole}, got ${userRole}`);
-        setAuthorized(false);
-      } else {
-        console.log("User authorized");
-        setAuthorized(true);
+      const role = await getUserRole();
+      console.log("ProtectedRoute - User role:", role);
+
+      const isHardcodedAdmin = ADMIN_EMAILS.includes((user.email || "").toLowerCase());
+
+      // If this is an owner route and user is not admin
+      if (requiredRole === "owner" && role !== "admin" && !isHardcodedAdmin) {
+        setRedirectTo("/command-board");
+        setLoading(false);
+        return;
       }
-      
+
+      // Authorized for this route
+      setAuthorized(true);
+      setLoading(false);
+
     } catch (error) {
-      console.error('Auth check error:', error);
-      setAuthorized(false);
-    } finally {
+      console.error("Auth error:", error);
+      setRedirectTo("/login");
       setLoading(false);
     }
   };
 
+  // Wait until auth check finishes
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  if (!authorized) {
-    return <Navigate to="/login" replace />;
+  // Redirect if needed
+  if (redirectTo) {
+    return <Navigate to={redirectTo} replace />;
   }
 
+  // Authorized
   return children;
 };
 
