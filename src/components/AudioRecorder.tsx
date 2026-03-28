@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Button } from './ui/button';
 import { Mic, StopCircle, Upload, Play, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,17 +7,20 @@ import { cn } from '@/lib/utils';
 type RecordingState = 'idle' | 'recording' | 'stopped' | 'uploading' | 'success' | 'error';
 
 interface AudioRecorderProps {
-  onRecordingComplete?: (blob: Blob, priority: string) => void;
+  onRecordingComplete?: (blob: Blob, priority: string, assignee: string) => void;
   className?: string;
   showPrioritySelector?: boolean;
+  team?: any[];
 }
 
-const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete, className }) => {
+const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete, className, team = [] }) => {
   const [status, setStatus] = useState<RecordingState>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('All');
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -102,7 +106,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete, clas
 
   const handleConfirmAssign = () => {
     if (audioBlob && onRecordingComplete) {
-      onRecordingComplete(audioBlob, priority);
+      onRecordingComplete(audioBlob, priority, selectedAssignee);
       // Automatically reset to idle state for next recording
       resetRecording();
     }
@@ -118,52 +122,125 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete, clas
       </div>
 
       <div className="flex flex-col items-center justify-center gap-6">
-        {/* Status Visualizer placeholder or Animation */}
-        <div className={cn(
-          "w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300",
-          status === 'recording' ? "bg-red-500 animate-pulse scale-110 shadow-lg shadow-red-500/20" : "bg-secondary"
-        )}>
-          {status === 'recording' ? (
-            <div className="w-4 h-4 rounded-sm bg-white" />
-          ) : (
-            <Mic className={cn("w-8 h-8", status === 'idle' ? "text-primary" : "text-muted-foreground")} />
+        {/* Main Mic Button / Interaction Area */}
+        <div className="relative group">
+          {/* Wave Animation (Visible only when recording) */}
+          {status === 'recording' && (
+            <div className="absolute inset-0 -m-8 flex items-center justify-center pointer-events-none">
+              <div className="absolute w-32 h-32 bg-primary/20 rounded-full animate-ping shadow-[0_0_30px_10px_rgba(30,144,255,0.3)]" />
+              <div className="absolute w-40 h-40 bg-primary/10 rounded-full animate-pulse blur-xl" />
+              {/* Particle-like waves */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                {[...Array(3)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute border border-primary/30 rounded-full"
+                    initial={{ width: 60, height: 60, opacity: 0.5 }}
+                    animate={{ width: 140, height: 140, opacity: 0 }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      delay: i * 0.6,
+                      ease: "easeOut"
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           )}
+
+          <button
+            onClick={status === 'recording' ? stopRecording : startRecording}
+            disabled={status === 'uploading' || status === 'success'}
+            className={cn(
+              "w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 relative z-10 shadow-2xl active:scale-95",
+              status === 'recording' 
+                ? "bg-red-500 scale-110 shadow-red-500/40" 
+                : "bg-gradient-to-br from-primary to-blue-600 shadow-primary/30"
+            )}
+          >
+            {status === 'recording' ? (
+              <StopCircle className="w-10 h-10 text-white animate-pulse" />
+            ) : status === 'uploading' ? (
+              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            ) : (
+              <Mic className="w-10 h-10 text-white" />
+            )}
+          </button>
         </div>
 
+        {/* Status Text */}
+        <p className={cn(
+          "text-[10px] font-bold uppercase tracking-[0.2em] transition-colors",
+          status === 'recording' ? "text-red-500 animate-pulse" : "text-muted-foreground/60"
+        )}>
+          {status === 'recording' ? 'Recording Directive...' : 
+           status === 'stopped' ? 'Review & Assign' : 
+           status === 'uploading' ? 'Transmitting...' : 
+           'Tap Mic to Record'}
+        </p>
+
         {/* Action Buttons */}
-        <div className="flex items-center gap-4 w-full">
-          {status === 'idle' && (
-            <Button onClick={startRecording} className="w-full h-12 rounded-xl text-sm font-bold gap-2">
-              <Mic className="w-4 h-4" /> START RECORDING
-            </Button>
-          )}
-
-          {status === 'recording' && (
-            <Button onClick={stopRecording} variant="destructive" className="w-full h-12 rounded-xl text-sm font-bold gap-2">
-              <StopCircle className="w-4 h-4" /> STOP RECORDING
-            </Button>
-          )}
-
+        <div className="flex flex-col items-center gap-4 w-full">
           {status === 'stopped' && (
             <div className="flex flex-col gap-4 w-full">
-              {/* Priority Selector */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 text-center">Select Priority</p>
-                <div className="flex bg-secondary/40 p-1 rounded-xl border border-border/50">
-                  {(['high', 'medium', 'low'] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPriority(p)}
-                      className={cn(
-                        "flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition-all",
-                        priority === p 
-                          ? "bg-background text-primary shadow-sm ring-1 ring-primary/20" 
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
+              {/* Employee & Priority Controls */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Assignee Pop-up/Dropdown */}
+                <div className="relative">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Assign To</p>
+                  <Button 
+                    variant="glass" 
+                    className="w-full text-[10px] font-bold uppercase h-10 rounded-xl border-white/5 bg-white/5"
+                    onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                  >
+                    {selectedAssignee === 'All' ? 'ALL TEAM' : selectedAssignee}
+                  </Button>
+                  
+                  {showAssigneeDropdown && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute bottom-full left-0 w-48 mb-2 bg-background/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 max-h-48 overflow-y-auto"
                     >
-                      {p}
-                    </button>
-                  ))}
+                      <button
+                        onClick={() => { setSelectedAssignee('All'); setShowAssigneeDropdown(false); }}
+                        className={cn("w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all", selectedAssignee === 'All' ? "bg-primary text-white" : "hover:bg-white/5")}
+                      >
+                        Assign to All
+                      </button>
+                      {team.map((emp) => (
+                        <button
+                          key={emp.$id}
+                          onClick={() => { setSelectedAssignee(emp.name); setShowAssigneeDropdown(false); }}
+                          className={cn("w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all", selectedAssignee === emp.name ? "bg-primary text-white" : "hover:bg-white/5")}
+                        >
+                          {emp.name}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Priority Selector */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Priority</p>
+                  <div className="flex bg-secondary/40 p-1 rounded-xl border border-border/50">
+                    {(['high', 'medium', 'low'] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPriority(p)}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all",
+                          priority === p 
+                            ? "bg-background text-primary shadow-sm ring-1 ring-primary/20" 
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

@@ -360,16 +360,17 @@ const handleLogout = async () => {
     }
   };
   
-  const handleAudioRecordingComplete = async (blob: Blob, selectedPriority: string) => {
+  const handleAudioRecordingComplete = async (blob: Blob, selectedPriority: string, selectedAssigneeName: string) => {
     try {
-      const file = new File([blob], "voice-command.mp3", { type: blob.type });
+      const file = new File([blob], "voice-command.webm", { type: "audio/webm" });
+      const currentUserName = localStorage.getItem('userName') || "Admin";
       
       const newTask = await createTask({
         title: "🎤 Voice Command",
-        description: `Voice directive for ${selectedAssignee}`,
-        employee_name: selectedAssignee,
+        description: `Voice directive for ${selectedAssigneeName}`,
+        employee_name: selectedAssigneeName === "All" ? "" : selectedAssigneeName,
         priority: selectedPriority,
-        deadline: "Not Set"
+        deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }, file);
       
       console.log("Task created successfully:", newTask.$id);
@@ -508,41 +509,46 @@ const handleLogout = async () => {
               </DialogHeader>
               
               <div className="px-6 py-2 space-y-6 max-h-[80vh] overflow-y-auto pb-8">
-                {/* Employee Selector - Vertical */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 flex items-center gap-2">
-                    <Users className="w-3 h-3" /> Assign To Team Member
-                  </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    <button
-                      onClick={() => setSelectedAssignee("All")}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-xl border transition-all duration-200",
-                        selectedAssignee === "All" 
-                          ? "bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10" 
-                          : "bg-secondary/40 border-border/50 text-muted-foreground hover:bg-secondary/60"
-                      )}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold italic tracking-tighter">ALL</div>
-                      <span className="text-sm font-medium">Assign to All Team</span>
-                    </button>
-                    {team.map((emp) => (
-                      <button
-                        key={emp.$id}
-                        onClick={() => setSelectedAssignee(emp.name)}
-                        className={cn(
-                          "flex items-center gap-3 p-3 rounded-xl border transition-all duration-200",
-                          selectedAssignee === emp.name 
-                            ? "bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10" 
-                            : "bg-secondary/40 border-border/50 text-muted-foreground hover:bg-secondary/60"
-                        )}
+                <Button 
+                  onClick={handleSend} 
+                  variant="neon" 
+                  className="w-full h-12 rounded-xl font-bold bg-gradient-to-r from-primary to-blue-500 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  ASSIGN TASK
+                </Button>
+
+                {/* Message Area */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Task Details</label>
+                  <div className="relative group">
+                    <Textarea
+                      autoFocus
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Describe the task or use voice command..."
+                      className="min-h-[120px] bg-secondary/40 border-border/50 rounded-2xl p-4 text-sm focus-visible:ring-primary/50 group-hover:border-primary/30 transition-all resize-none"
+                    />
+                    <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="glass"
+                        size="icon"
+                        onClick={handleFileSelect}
+                        className="w-10 h-10 rounded-xl hover:bg-white/10"
                       >
-                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xs font-bold uppercase">
-                          {emp.name.charAt(0)}
-                        </div>
-                        <span className="text-sm font-medium">{emp.name}</span>
-                      </button>
-                    ))}
+                        <ImagePlus className="w-5 h-5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={isRecording ? "neon" : "glass"}
+                        size="icon"
+                        onClick={handleMicToggle}
+                        className={cn("w-10 h-10 rounded-xl", isRecording && "animate-pulse")}
+                      >
+                        <Mic className="w-5 h-5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -591,36 +597,41 @@ const handleLogout = async () => {
                   </motion.div>
                 )}
 
-                {/* Message Area */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Task Details</label>
-                  <div className="relative group">
-                    <Textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Describe the task or use voice command..."
-                      className="min-h-[120px] bg-secondary/40 border-border/50 rounded-2xl p-4 text-sm focus-visible:ring-primary/50 group-hover:border-primary/30 transition-all"
-                    />
-                    <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="glass"
-                        size="icon"
-                        onClick={handleFileSelect}
-                        className="w-10 h-10 rounded-xl hover:bg-white/10"
+                {/* Employee Selector - Vertical */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 flex items-center gap-2">
+                    <Users className="w-3 h-3" /> Assign To Team Member
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <button
+                      onClick={() => setSelectedAssignee("All")}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-xl border transition-all duration-200",
+                        selectedAssignee === "All" 
+                          ? "bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10" 
+                          : "bg-secondary/40 border-border/50 text-muted-foreground hover:bg-secondary/60"
+                      )}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold italic tracking-tighter">ALL</div>
+                      <span className="text-sm font-medium">Assign to All Team</span>
+                    </button>
+                    {team.map((emp) => (
+                      <button
+                        key={emp.$id}
+                        onClick={() => setSelectedAssignee(emp.name)}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-xl border transition-all duration-200",
+                          selectedAssignee === emp.name 
+                            ? "bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10" 
+                            : "bg-secondary/40 border-border/50 text-muted-foreground hover:bg-secondary/60"
+                        )}
                       >
-                        <ImagePlus className="w-5 h-5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={isRecording ? "neon" : "glass"}
-                        size="icon"
-                        onClick={handleMicToggle}
-                        className={cn("w-10 h-10 rounded-xl", isRecording && "animate-pulse")}
-                      >
-                        <Mic className="w-5 h-5" />
-                      </Button>
-                    </div>
+                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xs font-bold uppercase">
+                          {emp.name.charAt(0)}
+                        </div>
+                        <span className="text-sm font-medium">{emp.name}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -641,14 +652,9 @@ const handleLogout = async () => {
                    </div>
                 )}
 
-                <Button 
-                  onClick={handleSend} 
-                  variant="neon" 
-                  className="w-full h-12 rounded-xl font-bold bg-gradient-to-r from-primary to-blue-500 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  ASSIGN TASK
-                </Button>
+                <div className="pt-2">
+                   {/* ASSIGN TASK button moved to top */}
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -661,6 +667,7 @@ const handleLogout = async () => {
           >
             <AudioRecorder 
               onRecordingComplete={handleAudioRecordingComplete} 
+              team={team}
               className="max-w-none shadow-none border-dashed bg-primary/5 border-primary/20"
             />
           </motion.div>
